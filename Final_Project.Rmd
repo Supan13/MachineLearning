@@ -1,0 +1,205 @@
+---
+title: "Final Project"
+output: html_document
+---
+```{r}
+#loading packages
+library(ggplot2)
+library(class)
+library(MASS)
+library(car)
+
+#data url
+data1_url <- 'http://archive.ics.uci.edu/ml/machine-learning-databases/parkinsons/parkinsons.data'
+
+#loading the data
+data1 <- read.csv(url(data1_url),sep=",",header=TRUE)
+data1[,1] <- NULL
+data1[,5] <- NULL
+
+#shuffling the data
+shuff<-runif(nrow(data1))
+data2 <- data1[order(shuff),]
+data2$status
+
+#training data set
+train_data <- data2[1:100,]
+
+#testing dataset
+test_data <- data2[101:195,]
+
+#matrix containing labels for training observations
+train_target <- data2[1:100,c(16)]
+
+#matrix containing labels for testing observations
+test_target<-data2[101:195,c(16)]
+
+#k-NN algorithm with k=5
+knn.m1 <- knn(train = train_data, test = test_data,train_target,k=5)
+knn.m1
+length(knn.m1)
+cm1 <- table(test_target,knn.m1)
+cm1
+
+#error rate
+1-sum(diag(cm1))/sum(cm1)
+library(caret) 
+confusionMatrix(cm1)
+
+#witk k=15
+knn.m4 <- knn(train = train_data, test = test_data,train_target,k=15)
+knn.m4
+length(knn.m4)
+cm4 <- table(test_target,knn.m4)
+cm4
+1-sum(diag(cm4))/sum(cm4)
+confusionMatrix(cm4)
+
+knn.m3 <- knn(train = train_data, test = test_data,train_target,k=10)
+knn.m3
+length(knn.m3)
+cm3 <- table(test_target,knn.m3)
+cm3
+1-sum(diag(cm3))/sum(cm3)
+confusionMatrix(cm3)
+```
+
+__Linear Discriminant Analysis__
+```{r}
+pairs(data1[,1:14])
+scatterplotMatrix(data1[1:14])
+
+#Ten predictor variables
+lsa.m10<-lda(status ~ MDVP.Fhi.Hz. + MDVP.Fo.Hz. +  MDVP.Flo.Hz. + MDVP.Jitter...  + MDVP.RAP + MDVP.PPQ + Jitter.DDP + MDVP.Shimmer + MDVP.Shimmer.dB. + Shimmer.APQ3, data=data2)
+lsa.m10
+lsa.m10.p<-predict(lsa.m10, newdata = data2[,c(1,2,3,4,5,6,7,8,9,10)])
+cm.m10<-table(lsa.m10.p$class,data2[,c(16)])
+cm.m10
+1-sum(diag(cm.m10))/sum(cm.m10)
+confusionMatrix(cm.m10)
+
+#using all attributes
+lm <- lda(status ~ MDVP.Fhi.Hz. + MDVP.Fo.Hz. +  MDVP.Flo.Hz. + MDVP.Jitter... + MDVP.RAP + MDVP.PPQ + Jitter.DDP + MDVP.Shimmer + MDVP.Shimmer.dB. + Shimmer.APQ3 + Shimmer.APQ5 + MDVP.APQ + Shimmer.DDA + NHR + HNR + RPDE + DFA + spread1 + spread2 + D2 + PPE, data=data_train)
+lm
+lm.p <- predict(lm,newdata=data_test)
+cm.m <-table(lm.p$class,data_test[,c(16)])
+cm.m
+1-sum(diag(cm.m))/sum(cm.m)
+confusionMatrix(cm.m)
+
+```
+
+__Support Vector Machine__
+```{r}
+library(e1071)
+
+#data url
+data1_url <- 'http://archive.ics.uci.edu/ml/machine-learning-databases/parkinsons/parkinsons.data'
+
+#loading the data
+data1 <- read.csv(url(data1_url),sep=",",header=TRUE)
+
+#don't need these variables
+data1[,1] <- NULL
+data1[,5] <- NULL
+
+
+#insample
+in_sample <- data1[1:100,]
+#outsample
+out_sample <- data1[101:195,]
+x_in <- in_sample[,-16]
+
+#convering the insample dataset of independent variables to matrix
+x_in <- as.matrix(x_in)
+
+#out sample dataset as matrix
+x_out <- out_sample[,-16]
+x_out <- as.matrix(x_out)
+#dependent variable for in sample i.e. status of person in this case 0 is non-parkinson and 1 is parkinson
+y_in <- in_sample$status
+
+#dependent variable for out sample
+y_out <- out_sample$status
+
+#cost-values
+costvalues <- 10^seq(-3,2,1)
+
+#insample as data frame where y is as factor
+dat <- data.frame(x=x_in, y=as.factor(y_in))
+
+#svm model with linear kernel
+tuned.svm.linear <- tune(svm,y~., data=dat, ranges=list(cost=costvalues), kernel="linear")
+summary(tuned.svm.linear)
+tuned.svm.linear$best.performance
+
+#svm model with radial kernel
+tuned.svm.radial <- tune(svm,y~., data=dat, ranges=list(cost=costvalues), kernel="radial")
+summary(tuned.svm.radial)
+tuned.svm.radial$best.performance
+
+#The best model is with cost=100 and kernel linear
+#outsample dataframe and y as factor
+simdat <- data.frame(x=x_out, y=as.factor(y_out))
+
+#predicting the model on out sample
+yhat <- predict(tuned.svm.linear$best.model,newdata=simdat)
+
+#confusion matrix
+table(predicted=yhat,truth=y_out)
+
+#percentage correct
+sum(yhat==simdat$y)/length(simdat$y)
+```
+
+__Logistic Regression__
+```{r}
+#logistic regression model on in-sample data
+logit.out <- glm(y~.,data=dat,family = "binomial")
+
+#predicting the out-of-sample
+yhat.con <- predict(logit.out,newdata=simdat,type="response")
+yhat1 <- round(yhat.con)
+table(predicted=yhat1,truth=y_out)
+
+#percentage correct of logistic regression
+sum(yhat1==simdat$y)/length(simdat$y)
+```
+
+__Decision Trees__
+```{r}
+
+library(C50)
+library(gmodels)
+library(rpart)
+library(rattle)
+library(RColorBrewer)
+library(tree)
+library(party)
+
+data_train <- data1[1:100,]
+data_test  <- data1[101:195, ]
+
+prop.table(table(data_train$status))
+prop.table(table(data_test$status))
+
+model <- C5.0(data_train[-16], as.factor(data_train$status))
+model
+summary(model)
+
+data_type_pred <- predict(model, data_test)
+
+# cross tabulation of predicted versus actual classes
+CrossTable(data_test$status, data_type_pred, prop.chisq = FALSE, prop.c = FALSE, prop.r = FALSE, dnn = c('actual type', 'predicted type'))
+
+
+formula <- status ~ MDVP.Fhi.Hz. + MDVP.Fo.Hz. +  MDVP.Flo.Hz. + MDVP.Jitter... + MDVP.RAP + MDVP.PPQ + Jitter.DDP + MDVP.Shimmer + MDVP.Shimmer.dB. + Shimmer.APQ3 + Shimmer.APQ5 + MDVP.APQ + Shimmer.DDA + NHR + HNR + RPDE + DFA + spread1 + spread2 + D2 + PPE
+
+plot(fit, uniform=T, main="Classification Tree for Parkinson Disease")
+text(fit, use.n=TRUE, all=TRUE, cex=.8)
+fit <- rpart(formula, method="anova", data=data_train)
+plot(fit, uniform=T, main="Classification Tree for Parkinson Disease")
+text(fit, use.n=TRUE, all=TRUE, cex=.8)
+par(mfrow=c(1,2)) # two plots on one page
+rsq.rpart(fit)
+```
